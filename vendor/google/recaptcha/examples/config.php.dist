@@ -1,7 +1,5 @@
 <?php
 /**
- * This is a PHP library that handles calling reCAPTCHA.
- *
  * BSD 3-Clause License
  * @copyright (c) 2019, Google Inc.
  * @link https://www.google.com/recaptcha
@@ -32,19 +30,17 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-namespace ReCaptcha;
-
-/**
- * Method used to send the request to the service.
- */
-interface RequestMethod
-{
-
-    /**
-     * Submit the request with the specified parameters.
-     *
-     * @param RequestParameters $params Request parameters
-     * @return string Body of the reCAPTCHA response
-     */
-    public function submit(RequestParameters $params);
-}
+return [
+  'v2-standard' => [
+    'site' => '',
+    'secret' => '',
+  ],
+  'v2-invisible' => [
+    'site' => '',
+    'secret' => '',
+  ],
+  'v3' => [
+    'site' => '',
+    'secret' => '',
+  ],
+];

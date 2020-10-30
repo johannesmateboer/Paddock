@@ -39,70 +39,66 @@ use ReCaptcha\RequestMethod;
 use ReCaptcha\RequestParameters;
 
 /**
- * Sends a POST request to the reCAPTCHA service, but makes use of fsockopen()
- * instead of get_file_contents(). This is to account for people who may be on
- * servers where allow_url_open is disabled.
+ * Sends cURL request to the reCAPTCHA service.
+ * Note: this requires the cURL extension to be enabled in PHP
+ * @see http://php.net/manual/en/book.curl.php
  */
-class SocketPost implements RequestMethod
+class CurlPost implements RequestMethod
 {
     /**
-     * Socket to the reCAPTCHA service
-     * @var Socket
+     * Curl connection to the reCAPTCHA service
+     * @var Curl
      */
-    private $socket;
+    private $curl;
+
+    /**
+     * URL for reCAPTCHA siteverify API
+     * @var string
+     */
+    private $siteVerifyUrl;
 
     /**
      * Only needed if you want to override the defaults
      *
-     * @param \ReCaptcha\RequestMethod\Socket $socket optional socket, injectable for testing
+     * @param Curl $curl Curl resource
      * @param string $siteVerifyUrl URL for reCAPTCHA siteverify API
      */
-    public function __construct(Socket $socket = null, $siteVerifyUrl = null)
+    public function __construct(Curl $curl = null, $siteVerifyUrl = null)
     {
-        $this->socket = (is_null($socket)) ? new Socket() : $socket;
+        $this->curl = (is_null($curl)) ? new Curl() : $curl;
         $this->siteVerifyUrl = (is_null($siteVerifyUrl)) ? ReCaptcha::SITE_VERIFY_URL : $siteVerifyUrl;
     }
 
     /**
-     * Submit the POST request with the specified parameters.
+     * Submit the cURL request with the specified parameters.
      *
      * @param RequestParameters $params Request parameters
      * @return string Body of the reCAPTCHA response
      */
     public function submit(RequestParameters $params)
     {
-        $errno = 0;
-        $errstr = '';
-        $urlParsed = parse_url($this->siteVerifyUrl);
+        $handle = $this->curl->init($this->siteVerifyUrl);
 
-        if (false === $this->socket->fsockopen('ssl://' . $urlParsed['host'], 443, $errno, $errstr, 30)) {
-            return '{"success": false, "error-codes": ["'.ReCaptcha::E_CONNECTION_FAILED.'"]}';
+        $options = array(
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $params->toQueryString(),
+            CURLOPT_HTTPHEADER => array(
+                'Content-Type: application/x-www-form-urlencoded'
+            ),
+            CURLINFO_HEADER_OUT => false,
+            CURLOPT_HEADER => false,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => true
+        );
+        $this->curl->setoptArray($handle, $options);
+
+        $response = $this->curl->exec($handle);
+        $this->curl->close($handle);
+
+        if ($response !== false) {
+            return $response;
         }
 
-        $content = $params->toQueryString();
-
-        $request = "POST " . $urlParsed['path'] . " HTTP/1.0\r\n";
-        $request .= "Host: " . $urlParsed['host'] . "\r\n";
-        $request .= "Content-Type: application/x-www-form-urlencoded\r\n";
-        $request .= "Content-length: " . strlen($content) . "\r\n";
-        $request .= "Connection: close\r\n\r\n";
-        $request .= $content . "\r\n\r\n";
-
-        $this->socket->fwrite($request);
-        $response = '';
-
-        while (!$this->socket->feof()) {
-            $response .= $this->socket->fgets(4096);
-        }
-
-        $this->socket->fclose();
-
-        if (0 !== strpos($response, 'HTTP/1.0 200 OK')) {
-            return '{"success": false, "error-codes": ["'.ReCaptcha::E_BAD_RESPONSE.'"]}';
-        }
-
-        $parts = preg_split("#\n\s*\n#Uis", $response);
-
-        return $parts[1];
+        return '{"success": false, "error-codes": ["'.ReCaptcha::E_CONNECTION_FAILED.'"]}';
     }
 }
